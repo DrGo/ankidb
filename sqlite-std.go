@@ -126,6 +126,16 @@ func (db *DB) Close() (e error) {
 	return
 }
 
+func OpenOriginalDB(filename string) (db *DB, e error) {
+	db = &DB{}
+	sqldb, err := sqlx.Connect("sqlite3", filename)
+	if err != nil {
+		return db, err
+	}
+	db.DB = sqldb
+	return db, nil
+}
+
 func OpenDB(src io.Reader) (db *DB, e error) {
 	db = &DB{}
 	dbFile, err := dumpToTemp(src)
