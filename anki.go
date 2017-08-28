@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/jmoiron/sqlx"
@@ -156,36 +155,7 @@ func (a *Apkg) Close() (e error) {
 }
 
 func (a *Apkg) Collection() (*Collection, error) {
-	var deletedDecks []ID
-	if rows, err := a.db.Query("SELECT oid FROM graves WHERE type=2"); err != nil {
-		return nil, err
-	} else {
-		for rows.Next() {
-			id := new(ID)
-			if err := rows.Scan(id); err != nil {
-				return nil, err
-			}
-			deletedDecks = append(deletedDecks, *id)
-		}
-	}
-	collection := &Collection{}
-	if err := a.db.Get(collection, "SELECT * FROM col"); err != nil {
-		return nil, err
-	}
-	for _, deck := range collection.Decks {
-		for _, deleted := range deletedDecks {
-			if deck.ID == deleted {
-				delete(collection.Decks, deck.ID)
-				continue
-			}
-		}
-		conf, ok := collection.DeckConfigs[deck.ConfigID]
-		if !ok {
-			return nil, fmt.Errorf("Deck %d references non-existent config %d", deck.ID, deck.ConfigID)
-		}
-		deck.Config = conf
-	}
-	return collection, nil
+	return a.db.Collection()
 }
 
 // Notes is a wrapper around sqlx.Rows, which means that any standard sqlx.Rows
@@ -199,14 +169,7 @@ type Notes struct {
 // Notes returns a Notes struct representing all of the Note rows in the *.apkg
 // package file.
 func (a *Apkg) Notes() (*Notes, error) {
-	rows, err := a.db.Queryx(`
-		SELECT n.id, n.guid, n.mid, n.mod, n.usn, n.tags, n.flds, n.sfld,
-			CAST(n.csum AS text) AS csum -- Work-around for SQL.js trying to treat this as a float
-		FROM notes n
-		LEFT JOIN graves g ON g.oid=n.id AND g.type=1
-		ORDER BY id DESC
-	`)
-	return &Notes{rows}, err
+	return a.db.Notes()
 }
 
 // Note is a simple wrapper around sqlx's StructScan(), which returns a Note
@@ -228,30 +191,7 @@ type Cards struct {
 // Cards returns a Cards struct represeting all of the non-deleted cards in the
 // *.apkg package file.
 func (a *Apkg) Cards() (*Cards, error) {
-	rows, err := a.db.Queryx(`
-		SELECT c.id, c.nid, c.did, c.ord, c.mod, c.usn, c.type, c.queue, c.reps, c.lapses, c.left, c.odid,
-			CAST(c.factor AS real)/1000 AS factor,
-			CASE c.queue
-				WHEN 0 THEN NULL
-				WHEN 1 THEN c.due
-				WHEN 2 THEN c.due*24*60*60+(SELECT crt FROM col)
-			END AS due,
-			CASE
-				WHEN c.ivl == 0 THEN NULL
-				WHEN c.ivl < 0 THEN -ivl
-				ELSE c.ivl*24*60*60
-			END AS ivl,
-			CASE c.queue
-				WHEN 0 THEN NULL
-				WHEN 1 THEN c.odue
-				WHEN 2 THEN c.odue*24*60*60+(SELECT crt FROM col)
-			END AS odue
-		FROM cards c
-		LEFT JOIN graves g ON g.oid=c.id AND g.type=0
-		WHERE g.oid IS NULL
-		ORDER BY id DESC
-	`)
-	return &Cards{rows}, err
+	return a.db.Cards()
 }
 
 func (c *Cards) Card() (*Card, error) {
@@ -268,23 +208,7 @@ type Reviews struct {
 // non-deleted cards in the *.apkg package file, in reverse chronological
 // order (newest first).
 func (a *Apkg) Reviews() (*Reviews, error) {
-	rows, err := a.db.Queryx(`
-		SELECT r.id, r.cid, r.usn, r.ease, r.time, r.type,
-			CAST(r.factor AS real)/1000 AS factor,
-			CASE
-				WHEN r.ivl < 0 THEN -ivl
-				ELSE r.ivl*24*60*60
-			END AS ivl,
-			CASE
-				WHEN r.lastIvl < 0 THEN -ivl
-				ELSE r.lastIvl*24*60*60
-			END AS lastIvl
-		FROM revlog r
-		LEFT JOIN graves g ON g.oid=r.cid AND g.type=0
-		WHERE g.oid IS NULL
-		ORDER BY id DESc
-	`)
-	return &Reviews{rows}, err
+	return a.db.Reviews()
 }
 
 func (r *Reviews) Review() (*Review, error) {
