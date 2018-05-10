@@ -45,10 +45,11 @@ func (db *DB) Collection() (*Collection, error) {
 			}
 		}
 		conf, ok := collection.DeckConfigs[deck.ConfigID]
-		if !ok {
-			return nil, fmt.Errorf("Deck %d references non-existent config %d", deck.ID, deck.ConfigID)
+		if ok {
+			deck.Config = conf
+		} else {
+			//return nil, fmt.Errorf("Deck %d references non-existent config %d", deck.ID, deck.ConfigID)
 		}
-		deck.Config = conf
 	}
 	return collection, nil
 }
